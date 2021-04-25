@@ -19,12 +19,27 @@ from sklearn.preprocessing import StandardScaler
 
 
 class kCentroidsClassifier(BaseEstimator):
-    def __init__(self, k=None, groupingMethod=None):
+    
+    
+    def __init__(self, k=None, groupingMethodString=None):
         super().__init__()
         self.k = k
-        self.groupingMethod = groupingMethod
+        self.groupingMethodString = groupingMethodString  #piece of shit sklearn demands it
+        self.availableGroupingMethods = {'placeholder': None, 'genetic': None, 'kmeans': self.kminhos_grouping}
+        self.groupingMethod = self.getGroupingMethod(self.groupingMethodString)
         self.classes_map = None
         self.clusters = None
+
+
+    def getGroupingMethod(self, groupingMethodString):
+        if not groupingMethodString or groupingMethodString not in self.availableGroupingMethods.keys():
+            raise ValueError("Método inválido!")
+        return self.availableGroupingMethods[groupingMethodString]
+
+
+    def kminhos_grouping(self, dado_classe):
+        kminhos = sklearn.cluster.KMeans(n_clusters=self.k, random_state=0).fit(dado_classe)
+        return kminhos.cluster_centers_
 
 
     def fit(self, x_train, y_train):
@@ -37,10 +52,9 @@ class kCentroidsClassifier(BaseEstimator):
         clusters_list = []
         for classe, dado_classe in data_by_classes:
             dado_classe.drop(columns=['classe'], inplace=True)
-            kminhos = self.groupingMethod(n_clusters=self.k, random_state=0).fit(dado_classe)
-            clusters_list.append(kminhos.cluster_centers_)
-            for _ in kminhos.cluster_centers_:
-                classes_map.append(classe)
+            cluster_centers = self.groupingMethod(dado_classe)
+            clusters_list.append(cluster_centers)
+            classes_map.extend([classe]*len(cluster_centers))
         clusters_list = np.array(clusters_list)
         clusters_list = clusters_list.reshape(len(data_by_classes) * self.k, x_train.shape[1])
         self.clusters = clusters_list
@@ -55,15 +69,16 @@ class kCentroidsClassifier(BaseEstimator):
             y_test.append(self.classes_map[predicted])
         return np.array(y_test)
 
+
 if __name__ == '__main__':
     iris = load_iris()
     method = sklearn.cluster.KMeans
-    kClassifier = kCentroidsClassifier()
+    kClassifier = kCentroidsClassifier(groupingMethodString='kmeans')
     
     scalar = StandardScaler()
     pipeline = Pipeline([('transformer', scalar), ('estimator', kClassifier)])
 
-    grade={'estimator__k': [2,3,4], 'estimator__groupingMethod': [sklearn.cluster.KMeans]}
+    grade={'estimator__k': [2,3,4]}
 
     gs = GridSearchCV(estimator=pipeline, param_grid = grade, 
                     scoring='accuracy', cv = 5)
