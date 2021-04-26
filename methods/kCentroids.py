@@ -17,6 +17,7 @@ from sklearn.model_selection import cross_val_score, GridSearchCV, RepeatedStrat
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from grouping import geneticGrouping
 
 class kCentroidsClassifier(BaseEstimator):
     
@@ -25,7 +26,7 @@ class kCentroidsClassifier(BaseEstimator):
         super().__init__()
         self.k = k
         self.groupingMethodString = groupingMethodString  #piece of shit sklearn demands it
-        self.availableGroupingMethods = {'placeholder': None, 'genetic': None, 'kmeans': self.kminhos_grouping}
+        self.availableGroupingMethods = {'placeholder': None, 'genetic': self.genetic_grouping, 'kmeans': self.kminhos_grouping}
         self.groupingMethod = self.getGroupingMethod(self.groupingMethodString)
         self.classes_map = None
         self.clusters = None
@@ -41,6 +42,19 @@ class kCentroidsClassifier(BaseEstimator):
         kminhos = sklearn.cluster.KMeans(n_clusters=self.k, random_state=0).fit(dado_classe)
         return kminhos.cluster_centers_
 
+    
+    def genetic_grouping(self, dado_classe):
+        groups = geneticGrouping.run_ag(dado_classe, self.k, 10, 0.5, 0.1)
+        groups_df_list = groups.groupby('C-grupo')
+        
+        group_centroid_list = []
+        for group_label, group_df in groups_df_list:
+            group_df.drop(columns=['C-grupo'], inplace=True)
+            group_centroid = np.array(group_df.sum()/len(group_df))
+            group_centroid_list.append(group_centroid)
+        
+        return np.array(group_centroid_list)
+
 
     def fit(self, x_train, y_train):
         if len(x_train) != len(y_train):
@@ -53,13 +67,13 @@ class kCentroidsClassifier(BaseEstimator):
         for classe, dado_classe in data_by_classes:
             dado_classe.drop(columns=['classe'], inplace=True)
             cluster_centers = self.groupingMethod(dado_classe)
-            clusters_list.append(cluster_centers)
+            for center in cluster_centers:
+                clusters_list.append(center)
             classes_map.extend([classe]*len(cluster_centers))
         clusters_list = np.array(clusters_list)
-        clusters_list = clusters_list.reshape(len(data_by_classes) * self.k, x_train.shape[1])
         self.clusters = clusters_list
         self.classes_map = classes_map
-
+        print("fitei")
 
     def predict(self, x_test):
         y_test = []
@@ -73,8 +87,8 @@ class kCentroidsClassifier(BaseEstimator):
 if __name__ == '__main__':
     iris = load_iris()
     method = sklearn.cluster.KMeans
-    kClassifier = kCentroidsClassifier(groupingMethodString='kmeans')
-    
+    kClassifier = kCentroidsClassifier(groupingMethodString='genetic')
+
     scalar = StandardScaler()
     pipeline = Pipeline([('transformer', scalar), ('estimator', kClassifier)])
 
@@ -89,7 +103,7 @@ if __name__ == '__main__':
 
     print(scores)
 
-    mean = scores.mean()
+    mean = scores.mean()    
     std = scores.std()
     inf, sup = stats.norm.interval(0.95, loc=mean, 
                                 scale=std/np.sqrt(len(scores)))
