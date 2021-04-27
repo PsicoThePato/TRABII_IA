@@ -17,7 +17,7 @@ from sklearn.model_selection import cross_val_score, GridSearchCV, RepeatedStrat
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from grouping import geneticGrouping
+from .grouping import geneticGrouping
 
 class kCentroidsClassifier(BaseEstimator):
     
@@ -48,7 +48,7 @@ class kCentroidsClassifier(BaseEstimator):
         groups_df_list = groups.groupby('C-grupo')
         
         group_centroid_list = []
-        for group_label, group_df in groups_df_list:
+        for _, group_df in groups_df_list:
             group_df.drop(columns=['C-grupo'], inplace=True)
             group_centroid = np.array(group_df.sum()/len(group_df))
             group_centroid_list.append(group_centroid)
@@ -73,7 +73,6 @@ class kCentroidsClassifier(BaseEstimator):
         clusters_list = np.array(clusters_list)
         self.clusters = clusters_list
         self.classes_map = classes_map
-        print("fitei")
 
     def predict(self, x_test):
         y_test = []
