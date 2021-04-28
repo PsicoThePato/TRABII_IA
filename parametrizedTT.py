@@ -17,6 +17,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 import methods.kCentroids
+from util import validation_metrics
 
 
 def dict_initializer():
@@ -63,53 +64,34 @@ def dict_initializer():
 
     return dataset_dict, classifiers_dict, hiperParams_dict
 
+
 if __name__ == "__main__":
     rkf = sklearn.model_selection.RepeatedStratifiedKFold(
         n_splits=10, n_repeats=3
     )
-
-    results_table = pd.DataFrame(
-        columns=["Média", "Desvio Padrão", "Limite inferior", "Limite Superior"]
-    )
-
     dataset_dict, classifiers_dict, hiperParams_dict = dict_initializer()
     
     for df_name, dataset in dataset_dict.items():
+        results_table = pd.DataFrame(
+            columns=["Média", "Desvio Padrão", "Limite inferior", "Limite Superior"]
+        )
         scores_df = pd.DataFrame()
+        
         for name, classifier in classifiers_dict.items():
-            scalar = sklearn.preprocessing.StandardScaler()
-            pipeline = sklearn.pipeline.Pipeline(
-                [("transformer", scalar), ("estimator", classifier)]
-            )
+            pipeline = validation_metrics.get_pipeline(classifier)
             gs = sklearn.model_selection.GridSearchCV(
                 estimator=pipeline,
                 param_grid=hiperParams_dict[name],
                 scoring="accuracy",
                 cv=4,
             )
-
             scores = sklearn.model_selection.cross_val_score(
                 gs, dataset.data, dataset.target, scoring="accuracy", cv=rkf
             )
-            scores_df[name] = scores
-            mean = scores.mean()
-            std = scores.std()
-            inf, sup = stats.norm.interval(
-                0.95, loc=mean, scale=std / np.sqrt(len(scores))
-            )
 
-            results_table = results_table.append(
-                pd.Series(
-                    {
-                        "Média": mean,
-                        "Desvio Padrão": std,
-                        "Limite inferior": inf,
-                        "Limite Superior": sup,
-                    },
-                    name=name,
-                )
-            )
-            print(results_table)
+            scores_df[name] = scores
+            results_table = results_table.append(validation_metrics.metrics_series(scores, name))
+        
         path = f"output/tables/ParametrizedMethods{df_name}Table.csv"
         results_table.to_csv(path)
         sns.boxplot(data=scores_df)

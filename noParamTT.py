@@ -14,8 +14,10 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 import methods.oneR
+from util import validation_metrics
 
-if __name__ == "__main__":
+
+def get_training_dicts():
     iris = load_iris()
     wine = load_wine()
     cancer = load_breast_cancer()
@@ -28,19 +30,13 @@ if __name__ == "__main__":
         'digits': digits
         }
 
-    rkf = sklearn.model_selection.RepeatedStratifiedKFold(
-        n_splits=10, n_repeats=3
-    )
-
-    results_table = pd.DataFrame(
-        columns=["Média", "Desvio Padrão", "Limite inferior", "Limite Superior"]
-    )
     
     oneR = methods.oneR.oneRClassifier()
     gNB = GaussianNB()
     zeroR = DummyClassifier()
     random = DummyClassifier(strategy="uniform")
     stratifiedRandom = DummyClassifier(strategy="stratified")
+    
     classifiers_dict = {
         "zeroR": zeroR,
         "oneR": oneR,
@@ -49,35 +45,30 @@ if __name__ == "__main__":
         "stratifiedRandom": stratifiedRandom,
     }
 
+    return dataset_dict, classifiers_dict
+
+if __name__ == "__main__":
+    dataset_dict, classifiers_dict = get_training_dicts()
+    rkf = sklearn.model_selection.RepeatedStratifiedKFold(
+        n_splits=10, n_repeats=3
+    )
+
     for df_name, dataset in dataset_dict.items():
 
+        results_table = pd.DataFrame(
+            columns=["Média", "Desvio Padrão", "Limite inferior", "Limite Superior"]
+        )
         scores_df = pd.DataFrame()
+
         for name, classifier in classifiers_dict.items():
-            scalar = sklearn.preprocessing.StandardScaler()
-            pipeline = sklearn.pipeline.Pipeline(
-                [("transformer", scalar), ("estimator", classifier)]
-            )
+            pipeline = validation_metrics.get_pipeline(classifier)
             scores = sklearn.model_selection.cross_val_score(
                 pipeline, dataset.data, dataset.target, scoring="accuracy", cv=rkf
             )
+            
             scores_df[name] = scores
-            mean = scores.mean()
-            std = scores.std()
-            inf, sup = stats.norm.interval(
-                0.95, loc=mean, scale=std / np.sqrt(len(scores))
-            )
-            results_table = results_table.append(
-                pd.Series(
-                    {
-                        "Média": mean,
-                        "Desvio Padrão": std,
-                        "Limite inferior": inf,
-                        "Limite Superior": sup,
-                    },
-                    name=name,
-                )
-            )
-            print(results_table)
+            results_table = results_table.append(validation_metrics.metrics_series(scores, name))
+        
         path=f'output/tables/noParamMethods{df_name}Table.csv'
         results_table.to_csv(path)
         sns.boxplot(data=scores_df)
