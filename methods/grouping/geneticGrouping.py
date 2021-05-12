@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from sklearn.datasets import load_iris
 
-from grouping import utility
+from . import utility
 
 
 def sexo(estados, populacao, cross_ratio, sse_teste):
